@@ -9,6 +9,12 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.16.6"
+    "@ilijazm/astro-styled-background-components": "../",
+    "@ilijazm/tailwindcss-section": "^1.0.2",
+    "@ilijazm/tailwindcss-semantic-palette": "^0.2.1",
+    "@ilijazm/tailwindcss-wrapper": "^1.0.2",
+    "@tailwindcss/vite": "^4.1.18",
+    "astro": "^5.16.6",
+    "tailwindcss": "^4.1.18"
   }
 }

@@ -1,0 +1,40 @@
+@utility debug {
+  @apply border-2 border-red-500 border-dotted;
+}
+
+@utility text-display-1 {
+  @apply text-6xl tracking-tighter leading-20 pb-lg;
+}
+
+@utility text-display-2 {
+  @apply text-5xl tracking-tighter leading-20 pb-lg;
+}
+
+@utility text-heading {
+  @apply text-3xl font-extrabold tracking-tight;
+}
+
+@utility text-subheading {
+  @apply text-base font-bold;
+}
+
+@utility text-lead {
+  @apply font-medium text-lg;
+}
+
+@utility text-body {
+  @apply text-content-800 leading-7;
+}
+
+@utility heading-underline {
+  @apply w-42 my-md border-2 border-primary-500;
+}
+
+@utility heading-underline-center {
+  @apply heading-underline mx-auto;
+}
+
+@utility text-overline {
+  @apply text-xs text-primary-700 tracking-widest font-semibold uppercase;
+  line-height: 1.272;
+}

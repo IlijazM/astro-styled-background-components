@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+@import '@ilijazm/tailwindcss-wrapper';
+@import '@ilijazm/tailwindcss-section';
+
+@plugin "@ilijazm/tailwindcss-semantic-palette" {
+  semantic-palette--primary: '#6f6da6';
+  semantic-palette--secondary: 'var(--color-amber-*)';
+  semantic-palette--surface: 'var(--color-slate-*)';
+}
+
+@import "./utility.css";
