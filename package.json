@@ -15,6 +15,9 @@
     "abstract",
     "patterns"
   ],
+  "repository": {
+    "url": "https://github.com/IlijazM/astro-styled-background-components"
+  },
   "scripts": {},
   "devDependencies": {
     "astro": "^5.16.6"
