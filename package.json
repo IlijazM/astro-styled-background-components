@@ -1,5 +1,5 @@
 {
-  "name": "astro-styled-background-components",
+  "name": "@ilijazm/astro-styled-background-components",
   "version": "0.0.1",
   "type": "module",
   "exports": {
@@ -10,7 +10,10 @@
     "index.ts"
   ],
   "keywords": [
-    "astro-component"
+    "astro-component",
+    "background",
+    "abstract",
+    "patterns"
   ],
   "scripts": {},
   "devDependencies": {
