@@ -3,4 +3,8 @@
 
 import WavyBackground from './src/WavyBackground.astro';
 
-export default WavyBackground;
+const backgrounds = {
+    WavyBackground,
+}
+
+export default backgrounds;

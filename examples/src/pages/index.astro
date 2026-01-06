@@ -1,12 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
 
-import WavyBackground from "@ilijazm/astro-styled-background-components";
+import Backgrounds from "@ilijazm/astro-styled-background-components";
 ---
 
 <Layout>
-  <section class="section-2xl flex justify-center items-center overflow-hidden">
-    <WavyBackground />
+  <section
+    class="relative flex justify-center items-center py-96 overflow-hidden"
+  >
+    <Backgrounds.WavyBackground />
     <h1 class="text-display-1 text-white font-mono">
       &lt;WavyBackground /&gt;
     </h1>
