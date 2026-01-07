@@ -1,145 +1,264 @@
 ---
 interface Props {
+  seed?: number;
+  secondarySeed?: number;
+  size?: number;
+  position1?: Vec2;
+  position2?: Vec2;
+  width?: number;
+  height?: number;
+  baseRadius?: number;
+  points?: number;
+  wobble?: number;
+  wobbleAmplitude?: number;
   fillColor?: string;
+  bandColors?: string[];
 }
+
+const seed = Astro.props.seed ?? 777;
+const secondarySeed = Astro.props.secondarySeed ?? seed + 1;
+const size = Astro.props.size ?? 400;
+const position1 = Astro.props.position1 ?? { x: 0, y: 1 };
+const position2 = Astro.props.position2 ?? { x: 1, y: 0 };
+const width = Astro.props.width ?? 1200;
+const height = Astro.props.height ?? 650;
+const baseRadius = Astro.props.baseRadius ?? 200;
+const points = Astro.props.points ?? 12;
+const wobble = Astro.props.wobble ?? 1;
+const wobbleAmplitude = Astro.props.wobbleAmplitude ?? 0.1;
 
 // Default color is indigo-500 from tailwindcss.
 const fillColor = Astro.props.fillColor ?? "#6366f1";
+const bandColors = Astro.props.bandColors ?? [
+  "#ffffff16",
+  "#ffffff16",
+  "#ffffff16",
+  "#ffffff16",
+];
+
+/* ------------------------------------------------------------------ */
+/* Types                                                              */
+/* ------------------------------------------------------------------ */
+
+type RNG = () => number;
+
+type Vec2 = { x: number; y: number };
+
+interface RingCornerConfig {
+  position: Vec2;
+  baseRadius: number;
+  size: number;
+  bands: number;
+  points: number;
+  wobble: number; // 0..1, how irregular the circle is
+  wobbleAmplitude: number; // 0..something, radius factor
+  seed: number;
+}
+
+interface PolarNoiseField {
+  center: Vec2;
+  baseRadius: number;
+  bandThickness: number;
+  angles: number[];
+  offsets: number[]; // per-angle radial noise in [-wobbleAmplitude, +wobbleAmplitude]
+}
+
+/* ------------------------------------------------------------------ */
+/* Deterministic RNG                                                   */
+/* ------------------------------------------------------------------ */
+
+function mulberry32(seed: number): RNG {
+  let t: number = seed >>> 0;
+  return (): number => {
+    t += 0x6d2b79f5;
+    let x: number = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Catmull–Rom → cubic Bézier                                          */
+/* ------------------------------------------------------------------ */
+
+function catmullRomClosedToBezierPath(
+  points: Vec2[],
+  tension: number = 1
+): string {
+  if (points.length < 3) return "";
+  const n: number = points.length;
+
+  const c = (i: number): Vec2 => points[(i + n) % n];
+
+  let d: string = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)} `;
+
+  for (let i: number = 0; i < n; i++) {
+    const p0: Vec2 = c(i - 1);
+    const p1: Vec2 = c(i);
+    const p2: Vec2 = c(i + 1);
+    const p3: Vec2 = c(i + 2);
+
+    const t: number = tension;
+
+    const cp1x: number = p1.x + ((p2.x - p0.x) / 6) * t;
+    const cp1y: number = p1.y + ((p2.y - p0.y) / 6) * t;
+
+    const cp2x: number = p2.x - ((p3.x - p1.x) / 6) * t;
+    const cp2y: number = p2.y - ((p3.y - p1.y) / 6) * t;
+
+    d += `C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(
+      2
+    )} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} `;
+  }
+
+  return d + "Z";
+}
+
+/* ------------------------------------------------------------------ */
+/* Polar noise field: one imperfect circle per corner                  */
+/* ------------------------------------------------------------------ */
+
+function createPolarNoiseField(
+  cfg: RingCornerConfig,
+  width: number,
+  height: number
+): PolarNoiseField {
+  const center: Vec2 = {
+    x: width * cfg.position.x,
+    y: height * cfg.position.y,
+  };
+
+  const rand: RNG = mulberry32(cfg.seed);
+  const angles: number[] = [];
+  const offsets: number[] = [];
+
+  const twoPi: number = Math.PI * 2;
+  const step: number = twoPi / cfg.points;
+
+  for (let i: number = 0; i < cfg.points; i++) {
+    const baseAngle: number = i * step;
+
+    // Slight angle jitter to avoid too-regular slices
+    const jitter: number = (rand() - 0.5) * step * 0.35 * cfg.wobble;
+    const angle: number = baseAngle + jitter;
+
+    // Radial noise in [-wobbleAmplitude, +wobbleAmplitude] (relative factor)
+    const noiseFactor: number = (rand() - 0.5) * 2 * cfg.wobbleAmplitude;
+
+    angles.push(angle);
+    offsets.push(noiseFactor);
+  }
+
+  return {
+    center,
+    baseRadius: cfg.baseRadius,
+    bandThickness: cfg.size / cfg.bands,
+    angles,
+    offsets,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Build a single band from a shared noise field                       */
+/* ------------------------------------------------------------------ */
+
+function generateNoisyCirclePath(
+  field: PolarNoiseField,
+  layerIndex: number,
+  tension: number = 1
+): string {
+  const { center, baseRadius, bandThickness, angles, offsets } = field;
+
+  const radius: number = baseRadius + layerIndex * bandThickness;
+  const points: { x: number; y: number }[] = [];
+
+  for (let i: number = 0; i < angles.length; i++) {
+    const angle: number = angles[i];
+    const noiseFactor: number = offsets[i];
+
+    const r: number = radius * (1 + noiseFactor);
+
+    const cosA: number = Math.cos(angle);
+    const sinA: number = Math.sin(angle);
+
+    points.push({
+      x: center.x + cosA * r,
+      y: center.y + sinA * r,
+    });
+  }
+
+  return catmullRomClosedToBezierPath(points, tension);
+}
+
+/* ------------------------------------------------------------------ */
+/* Scene setup                                                         */
+/* ------------------------------------------------------------------ */
+
+const backgroundColor: string = fillColor;
+
+const corners: RingCornerConfig[] = [
+  {
+    position: position1,
+    baseRadius,
+    size,
+    bands: bandColors.length,
+    points,
+    wobble,
+    wobbleAmplitude,
+    seed: seed,
+  },
+  {
+    position: position2,
+    baseRadius,
+    size,
+    bands: bandColors.length,
+    points,
+    wobble,
+    wobbleAmplitude,
+    seed: secondarySeed,
+  },
+];
+
+const polarFields: PolarNoiseField[] = corners.map((cfg: RingCornerConfig) =>
+  createPolarNoiseField(cfg, width, height)
+);
+
+const ringLayers = polarFields.map(
+  (field: PolarNoiseField, cornerIndex: number) => {
+    return Array.from(
+      { length: bandColors.length },
+      (_: unknown, bandIndex: number) => {
+        const d: string = generateNoisyCirclePath(field, bandIndex, 1);
+        const fill: string = bandColors[bandIndex];
+
+        return {
+          d,
+          fill,
+          key: `${cornerIndex}-${bandIndex}`,
+        };
+      }
+    );
+  }
+);
 ---
 
 <div style="z-index: -10; position: absolute; inset: 0; pointer-events: none;">
-  <!-- svg made with https://app.haikei.app/ -->
   <svg
-    xmlns="http://www.w3.org/2000/svg"
-    xmlns:xlink="http://www.w3.org/1999/xlink"
-    version="1.1"
+    viewBox={`0 0 ${width} ${height}`}
     preserveAspectRatio="xMidYMid slice"
-    viewBox="0 0 4096 2160"
+    aria-hidden="true"
     style="width: 100%; height: 100%"
-    ><rect x="0" y="0" width="4096" height="2160" fill={fillColor}></rect><defs
-      ><linearGradient id="grad1_0" x1="47.3%" y1="100%" x2="100%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad1_1" x1="47.3%" y1="100%" x2="100%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#847ddf"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad1_2" x1="47.3%" y1="100%" x2="100%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#6f66d9"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#847ddf"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad1_3" x1="47.3%" y1="100%" x2="100%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#6f66d9"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#5a50d2"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad1_4" x1="47.3%" y1="100%" x2="100%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#4338ca"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#5a50d2"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad2_0" x1="0%" y1="100%" x2="52.7%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad2_1" x1="0%" y1="100%" x2="52.7%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#847ddf"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#9893e5"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad2_2" x1="0%" y1="100%" x2="52.7%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#847ddf"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#6f66d9"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad2_3" x1="0%" y1="100%" x2="52.7%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#5a50d2"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#6f66d9"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><defs
-      ><linearGradient id="grad2_4" x1="0%" y1="100%" x2="52.7%" y2="0%"
-        ><stop
-          offset="12.074074074074073%"
-          stop-color="#5a50d2"
-          stop-opacity="1"></stop><stop
-          offset="87.92592592592592%"
-          stop-color="#4338ca"
-          stop-opacity="1"></stop></linearGradient
-      ></defs
-    ><g transform="translate(4096, 2160)"
-      ><path
-        d="M-1728 0C-1628.1 -190.6 -1528.3 -381.2 -1463.4 -606.2C-1398.6 -831.2 -1368.8 -1090.7 -1221.9 -1221.9C-1075 -1353.1 -811 -1356.1 -587.8 -1419.1C-364.6 -1482.1 -182.3 -1605 0 -1728L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M-1382.4 0C-1302.5 -152.5 -1222.6 -304.9 -1170.7 -484.9C-1118.9 -665 -1095 -872.5 -977.5 -977.5C-860 -1082.5 -648.8 -1084.9 -470.2 -1135.3C-291.7 -1185.6 -145.9 -1284 0 -1382.4L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M-1036.8 0C-976.9 -114.3 -917 -228.7 -878.1 -363.7C-839.2 -498.7 -821.3 -654.4 -733.1 -733.1C-645 -811.9 -486.6 -813.7 -352.7 -851.4C-218.8 -889.2 -109.4 -963 0 -1036.8L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M-691.2 0C-651.3 -76.2 -611.3 -152.5 -585.4 -242.5C-559.4 -332.5 -547.5 -436.3 -488.8 -488.8C-430 -541.2 -324.4 -542.4 -235.1 -567.6C-145.9 -592.8 -72.9 -642 0 -691.2L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M-345.6 0C-325.6 -38.1 -305.7 -76.2 -292.7 -121.2C-279.7 -166.2 -273.8 -218.1 -244.4 -244.4C-215 -270.6 -162.2 -271.2 -117.6 -283.8C-72.9 -296.4 -36.5 -321 0 -345.6L0 0Z"
-        fill="#ffffff22"></path></g
-    ><g transform="translate(0, 0)"
-      ><path
-        d="M1728 0C1586.8 185.8 1445.7 371.5 1359 562.9C1272.4 754.3 1240.2 951.4 1137.7 1137.7C1035.3 1324.1 862.6 1499.9 661.3 1596.5C459.9 1693.1 230 1710.5 0 1728L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M1382.4 0C1269.5 148.6 1156.6 297.2 1087.2 450.3C1017.9 603.5 992.1 761.1 910.2 910.2C828.2 1059.3 690.1 1199.9 529 1277.2C368 1354.5 184 1368.4 0 1382.4L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M1036.8 0C952.1 111.5 867.4 222.9 815.4 337.8C763.4 452.6 744.1 570.8 682.6 682.6C621.2 794.5 517.6 899.9 396.8 957.9C276 1015.8 138 1026.3 0 1036.8L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M691.2 0C634.7 74.3 578.3 148.6 543.6 225.2C508.9 301.7 496.1 380.5 455.1 455.1C414.1 529.6 345 599.9 264.5 638.6C184 677.2 92 684.2 0 691.2L0 0Z"
-        fill="#ffffff22"></path><path
-        d="M345.6 0C317.4 37.2 289.1 74.3 271.8 112.6C254.5 150.9 248 190.3 227.5 227.5C207.1 264.8 172.5 300 132.3 319.3C92 338.6 46 342.1 0 345.6L0 0Z"
-        fill="#ffffff22"></path></g
-    ></svg
   >
+    <rect x="0" y="0" width={width} height={height} fill={backgroundColor}
+    ></rect>
+
+    {
+      ringLayers.map((bands) =>
+        bands
+          .slice()
+          .reverse()
+          .map((band) => <path d={band.d} fill={band.fill} />)
+      )
+    }
+  </svg>
 </div>

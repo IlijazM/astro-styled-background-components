@@ -6,11 +6,48 @@ import Backgrounds from "@ilijazm/astro-styled-background-components";
 
 <Layout>
   <section
-    class="relative flex justify-center items-center py-96 overflow-hidden"
+    class="relative flex justify-center items-center py-32 mb-42 overflow-hidden"
+  >
+    <Backgrounds.WavyBackground
+      seed={1}
+      secondarySeed={2}
+      size={369}
+      position1={{ x: 0.02, y: 0.92 }}
+      position2={{ x: 1.02, y: 0.02 }}
+      baseRadius={200}
+      points={16}
+      wobble={0.6}
+      wobbleAmplitude={0.08}
+      fillColor="#081521"
+      bandColors={["#ffc145", "#ff9248", "#c0566e", "#6a3b6b", "#1a2340"]}
+    />
+
+    <pre
+      class="text-white font-mono">
+      &lt;Backgrounds.WavyBackground
+      &nbsp;&nbsp;seed=&#123;1&#125;
+      &nbsp;&nbsp;secondarySeed=&#123;2&#125;
+      &nbsp;&nbsp;size=&#123;369&#125;
+      &nbsp;&nbsp;position1=&#123;&#123; x: 0.02, y: 0.92 &#125;&#125;
+      &nbsp;&nbsp;position2=&#123;&#123; x: 1.02, y: 0.02&#125;&#125;
+      &nbsp;&nbsp;baseRadius=&#123;200&#125;
+      &nbsp;&nbsp;points=&#123;16&#125;
+      &nbsp;&nbsp;wobble=&#123;0.6&#125;
+      &nbsp;&nbsp;wobbleAmplitude=&#123;0.08&#125;
+      &nbsp;&nbsp;fillColor=&quot;#081521&quot;
+      &nbsp;&nbsp;bandColors=&#123;[&quot;#ffc145&quot;, &quot;#ff9248&quot;, &quot;#c0566e&quot;, &quot;#6a3b6b&quot;, &quot;#1a2340&quot;]&#125; &nbsp;&nbsp;
+      /&gt
+    </pre>
+  </section>
+  <section
+    class="relative flex justify-center items-center py-96 mb-42 overflow-hidden"
   >
     <Backgrounds.WavyBackground />
-    <h1 class="text-display-1 text-white font-mono">
-      &lt;WavyBackground /&gt;
-    </h1>
+
+    <pre
+      class="text-white font-mono">
+      &lt;Backgrounds.WavyBackground /&gt
+    </pre>
   </section>
+  hi
 </Layout>
